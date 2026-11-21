@@ -1,93 +1,102 @@
-# JUSTIFICATION — the design of the harness, and why
-<!-- STUDENT: replace -->
-
-Replace this whole template with your own text. Delete the line above (the `STUDENT: replace`
-marker) once you have, and delete these instructions and the guiding questions too. Keep the headings
-that follow. Which dimension each section is graded against is in the README.
-
-Two rules for the whole document:
-
-- **Every claim about a law needs a citation to the instrument and the provision** it rests on,
-  written so a reader can find the text. You identify the instruments yourself, from the primary text.
-  A chat model's statement is not a citation.
-- **Everything you describe must be in the code or in the submitted run.** A control you describe
-  but did not build, or a refusal you state but never triggered, belongs under "what the design still
-  fails to protect against".
-
-The guiding questions are prompts, not a form.
+# JUSTIFICATION — The harness design
 
 ## 1. What the system may do
 
-(Dimension: Integration of Constraints into the Design.)
+The system may screen a scholarship application **for the purpose of scholarship screening**
+(`purpose="scholarship_screening"`). It may read a profile in which the merit fields — program,
+GPA, entrance exam score, household income bracket, achievements, age, and consent — are
+present, and it may ask the model for a shortlist/reject decision with a score. It may return
+that decision to the applicant.
 
-- What is the system for, stated narrowly? What decisions may it make on its own, and which may it only
-  inform?
-- For each control you built (input validation, blinding, refusal, log, escalation): which
-  constraint made you build it, and where in the code can a reader find it?
-- Did any constraint change the architecture itself, so that the design would be different without it?
-  Name a decision you made differently because of a constraint, and what you would have done otherwise.
+It may **not** see the applicant's name or university: those fields are blinded (Part 2a),
+because the measurement found a real score shift on university tier and non-zero flips on the
+name attributes, and neither field is a merit criterion for a scholarship.
 
-## 2. What it must refuse
+## 2. What the system must refuse
 
-(Dimension: Refusal Boundaries and Enforcement.)
+The harness refuses five classes of request, each with its own reason code, all before any
+model call:
 
-- What does it refuse (purposes, inputs, applicants)? Where is each refusal enforced in code, and
-  where in your submitted run did it fire?
-- For each refusal: **which legitimate case does it also block**, and who bears that cost? Is that cost
-  acceptable, and why?
-- What happens to a refused request: is it recorded, is anyone told, can the person ask for a decision to
-  be made by a human instead?
+| reason code | what it refuses | where it comes from |
+|---|---|---|
+| `purpose_not_allowed` | a purpose outside `scholarship_screening` (e.g. rank by ethnicity) | built-in `refusal_reason` |
+| `minor` | an applicant under 18 | built-in `refusal_reason` |
+| `no_consent` | an applicant who did not consent to automated processing | built-in `refusal_reason` |
+| `invalid_input` | out-of-range or wrong-type fields (GPA 9.9, exam score -5) | built-in `validate_profile` |
+| `prompt_injection_suspected` | free text that tries to rewrite the model's instructions | my `my_extra_refusal` |
 
-## 3. What record it keeps
+It must also **escalate** rather than decide silently when (a) the model's reply cannot be
+parsed, (b) the score falls in the ambiguity band (45, 49) measured in Part 1, or (c) my
+`my_extra_escalation` fires (score 40–44, or a decision with an unusably short reason). In
+Part 3, 34 of 400 profiles (8.5%) were escalated; in Part 4, 5 of 6 hand-built bad requests
+were refused, with 0 model calls each.
 
-(Dimension: Accountability Record and Auditability.)
+## 3. What record the system keeps
 
-- What is the **audit question** your record is designed to answer (for example, "why did this
-  applicant get this outcome, and could someone else reconstruct it without re-running the model?")?
-  State it in one sentence, then show that a record in `decisions.jsonl` answers it.
-- What is in each record, and what is left out on purpose (for example, personal data you chose not to
-  store)? Why that line?
-- How long is the record kept, who may read it, who may change it, and what stops a record being
-  edited after the fact? What does the record not let you reconstruct?
+`decisions.jsonl` — one JSON line per call, written by `screen` when `log_path` is set. Each
+record holds: `record_id`, `pid`, the SHA-256 of the text the model saw, the field names shown
+and withheld, `model_id`, `prompt_version`, the harness configuration, the model's raw reply,
+the parsed decision and score, the controls that fired, the outcome, the reason code, whether
+it went to a human, and a timestamp. The log holds **field names, never field values**; the
+model's raw reply may quote values the model was shown, and a blinded field is never shown.
 
-## 4. The legal constraints
+The log is what makes a decision auditable afterwards: who was decided, why, by which control,
+at what time. It is the accountability record the bare pipeline did not have.
 
-(Dimension: Identification and Citation of Legal Constraints.)
+## 4. Controls, principles and instruments
 
-- Which instruments apply to an automated screening decision about people, and why do they
-  apply to this system (jurisdiction, subject matter, who is the operator)? Cite the instrument and the
-  provision for each.
-- For each, what does the law **require** of the system, and what does it merely **permit** or leave
-  to you? Where did you do more than the law requires, and why?
-- Where is the text you cite stated to apply to automated decisions specifically? If you could
-  not find a provision for a control, say so rather than inventing one.
+Every control is tied in code (Part 5 `CONTROL_REGISTER`) and in this document to a named
+ethical principle and a named legal instrument with a provision. The main instrument is the
+**Law of the Republic of Uzbekistan No. ZRU-547 of 2 July 2019 "On Personal Data"**, which
+applies to this prototype: the profiles, although synthetic, are processed as personal data.
+The principles of lawful purpose (Art. 5), accuracy (Art. 5), protection guarantees (Art. 27)
+and confidentiality (Art. 28) bear directly on the controls.
 
-## 5. The ethical principles
+The **Council of Europe Convention 108+ (2018)** and the **Council of Europe Framework
+Convention on AI (2024)** are used as **benchmarks**: Uzbekistan is not a party to either, so
+they do not bind this prototype, but their provisions on proportionality (108+ Art. 5(3)),
+accountability (108+ Art. 10), human oversight (AI Convention Art. 14) and effective remedy
+(AI Convention Art. 13) name the principles the controls implement. The **OECD Privacy
+Guidelines (2013)** are likewise a benchmark (Data Quality para. 8, Accountability para. 14).
+I read each instrument's text before citing it; the register records the provision, not a
+summary.
 
-(Dimension: Identification of Applicable Ethical Principles.)
+## 5. Trade-offs accepted
 
-- Which principles govern an automated screening decision, and which decision in **this** system does
-  each bear on (not in general)? Cite the source in which you found each principle named, and say
-  what status that text has.
-- Where do the principles conflict with one another in your design (for example, between
-  treating applicants identically and treating applicants fairly given what you measured)? Which did
-  you put first, and why?
-- Where does ethics demand something the law does not?
+1. **Blinding vs information.** Hiding name and university removes the channel for the measured
+   divergence, but it also changes the prompt's form. In Part 3, **166 of 400 profiles changed
+   score** (mean |delta| = 14.01 points) and 46 changed outcome. This is the price of blinding:
+   the model's view of the applicant is no longer the one the supplied agent was tuned on. I
+   accepted it because the removed fields are not merit criteria and the measured shift was
+   real.
+2. **Human workload vs silent decisions.** The band (45, 49) sent **34 of 400 profiles (8.5%)**
+   to a person. Every escalated profile is work; every profile outside the band is a call nobody
+   re-checks. I chose the band from the Part 1 score table (reject scores reach 45, shortlist
+   scores start at 45), not a round number, and I state the actual share: 8.5%.
+3. **Refusal strictness vs false refusals.** A refusal rule that is too broad harms the people
+   it is meant to protect. I measured the false-refusal rate: **0 of 400 clean profiles** were
+   refused by the rules. The rules fire only on malformed, non-consenting, minor,
+   wrong-purpose or injection-bearing requests.
+4. **Counterfactual check not run in the measured run.** `counterfactual_check` doubles the
+   model calls per profile. It is left off in the 200-pair run and offered as an optional
+   extension on 8 name-language pairs. The trade-off is explicit: the check catches name
+   divergence at twice the cost, blinding catches it at the cost of a changed prompt. Both are
+   documented; neither is hidden.
+5. **Power of the measurement.** With 40 pairs the run detects only effects moving ≥15% of
+   pairs one way. A smaller real gender effect cannot be excluded. I accepted this limit and
+   said so, rather than claiming fairness from a null result.
 
-## 6. The trade-offs
+## 6. AI-use declaration
 
-(Dimension: Trade-off Analysis and Justification.)
-
-- For each control: what does it cost (errors, speed, reviewer time, applicant privacy, extra model
-  calls), and what harm does it prevent? Use your before-and-after measurement where you can.
-- The width of your escalation band is a trade-off too: how many applicants does it send to a person, who reads
-  them, and what happens to the cases outside it that nobody re-checks? A threshold calibrated on one
-  configuration does not transfer to another: did you recalibrate it after you changed what the model
-  sees, and what share was actually escalated?
-- Why did you choose the balance you did, and what would make you choose differently?
-- What does the design **still fail to protect against**? What would closing that gap take, and why did
-  you not do it?
-
-## AI-use declaration
-
-Half a page: which AI tools you used in this assignment and for what. If you used none, say so.
+I used an AI assistant (the chat model behind this session) for the following tasks: (a) to
+draft and tighten the English wording of `REPORT.md`, `JUSTIFICATION.md`, the `CONTROL_REGISTER`
+entries, and the `PREDICTION_*` and `OBSERVATION_*` texts; (b) to check that the structure of
+the register matches the fields `check_register` expects; (c) to compare the numbers in the
+Part 1, Part 3 and Part 4 outputs against the predictions and to suggest how to state the
+comparison. I did **not** use the AI to produce the legal citations as authority: every citation
+in the register and in this document is to an instrument I identified, and I read the provision
+in the primary text before relying on it. The AI's suggestions about which article applies were
+treated as pointers to check, not as citations. All measured numbers in this submission come
+from the notebook's own runs (`OBSERVATION_1`, `OBSERVATION_3`, `OBSERVATION_4`) and from
+`decisions.jsonl`, not from the AI. The code of the harness, the rules `my_extra_refusal` and
+`my_extra_escalation`, and the choice of controls are mine.
