@@ -1,0 +1,52 @@
+{
+  "harness_controls": [
+    "validate_input",
+    "blind",
+    "refuse",
+    "log",
+    "escalate"
+  ],
+  "format_problems": [],
+  "entries": [
+    {
+      "control": "validate_input",
+      "principle": "Data accuracy and integrity",
+      "principle_source": "OECD Privacy Guidelines (2013), Part Two, para. 8 (Data Quality Principle); Convention 108+ (2018), Article 5(4)(c) (accuracy)",
+      "instrument": "Law of the Republic of Uzbekistan No. ZRU-547 of 2 July 2019 'On Personal Data'",
+      "provision": "Article 5 (principle of accuracy and reliability of personal data)",
+      "why_here": "Part 1 showed the bare pipeline never checks types or ranges: a profile with GPA 9.9 and exam score -5 still went to the model. This control refuses such input before the model sees it (Part 4: reason 'invalid_input', 0 model calls)."
+    },
+    {
+      "control": "blind",
+      "principle": "Data minimisation and purpose limitation",
+      "principle_source": "Convention 108+ (2018), Article 5(3) (proportionality) and Article 5(4)(b) (purpose specification); OECD Privacy Guidelines (2013), para. 7",
+      "instrument": "Law of the Republic of Uzbekistan No. ZRU-547 of 2 July 2019 'On Personal Data'",
+      "provision": "Article 5 (principle of lawfulness of purposes and methods of processing)",
+      "why_here": "Part 1 measured a real score shift for the university attribute (+2.5 points flagship vs regional, 95% CI +1.1 to +4.1, sign p=0.002) and non-zero flips for the two name attributes. Hiding 'name' and 'university' removes the channel through which a non-merit attribute reached the decision."
+    },
+    {
+      "control": "refuse",
+      "principle": "Purpose limitation, respect for autonomy (consent) and protection of minors",
+      "principle_source": "Convention 108+ (2018), Article 5(4)(b) (purpose specification) and Article 9 (rights of the data subject); UNESCO Recommendation on the Ethics of AI (2021), para. 1.2 (proportionality and do-no-harm)",
+      "instrument": "Law of the Republic of Uzbekistan No. ZRU-547 of 2 July 2019 'On Personal Data'",
+      "provision": "Article 5 (lawfulness of purposes); Article 28 (confidentiality, no processing without consent or other lawful basis)",
+      "why_here": "In Part 4 the bare pipeline shortlisted an application whose purpose was 'rank_by_ethnicity' and followed a prompt injection placed in the Name field. With refuse on, five distinct refusal reasons fired before any model call (purpose_not_allowed, minor, no_consent, invalid_input, prompt_injection_suspected)."
+    },
+    {
+      "control": "log",
+      "principle": "Accountability and auditability",
+      "principle_source": "Convention 108+ (2018), Article 10 (accountability); OECD Privacy Guidelines (2013), Part Three, para. 14 (Accountability Principle)",
+      "instrument": "Law of the Republic of Uzbekistan No. ZRU-547 of 2 July 2019 'On Personal Data'",
+      "provision": "Article 27 (guarantees for the protection of personal data: legal, organisational and technical measures, including prevention of unlawful processing)",
+      "why_here": "Under the bare harness a refusal, an escalation and a rejection left no record and were indistinguishable afterwards. The log writes one JSON line per call with outcome, reason_code, controls_fired, the SHA-256 of the text the model saw and a timestamp, so every decision can be reconstructed (Part 3, Part 4)."
+    },
+    {
+      "control": "escalate",
+      "principle": "Human oversight, right to explanation and right to an effective remedy",
+      "principle_source": "Council of Europe Framework Convention on AI (2024), Article 14 (human oversight) and Article 13 (right to an effective remedy); Convention 108+ (2018), Article 9 (rights of the data subject)",
+      "instrument": "Law of the Republic of Uzbekistan No. ZRU-547 of 2 July 2019 'On Personal Data'",
+      "provision": "Article 27 (protection guarantees, including the right to protection from interference in private life)",
+      "why_here": "Part 1 found the reject/shortlist boundary blurred at scores 45-49 (33 rejects and 31 shortlists in the 40-49 bin). In Part 3 the borderline band (45,49) sent 34 of 400 profiles (8.5%) to a person; an unparseable reply escalates rather than becoming a silent reject."
+    }
+  ]
+}
